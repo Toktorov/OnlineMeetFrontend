@@ -1,0 +1,65 @@
+@import "./variables";
+@import "./mixins";
+
+.home {
+  text-align: center;
+  padding: 3rem 0;
+
+  .hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem;
+
+    @include tablet {
+      flex-direction: column;
+      text-align: center;
+    }
+  }
+
+  .pricing {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 2rem;
+
+    .card {
+      background-color: $light-bg;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      width: 250px;
+      transition: transform 0.3s;
+
+      &.dark {
+        background-color: $dark-bg;
+      }
+
+      &:hover {
+        transform: translateY(-5px);
+      }
+
+      h3 {
+        font-size: 1.5rem;
+        font-weight: bold;
+      }
+
+      p {
+        font-size: 1.2rem;
+        color: $primary;
+        margin: 0.5rem 0;
+      }
+
+      ul {
+        text-align: left;
+        padding-left: 1rem;
+      }
+
+      button {
+        margin-top: 1rem;
+      }
+    }
+  }
+}
