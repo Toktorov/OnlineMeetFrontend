@@ -6,4 +6,4 @@ COPY . .
 RUN npm run build
 RUN npm install -g serve
 EXPOSE 14000
-CMD ["serve", "-s", "build", "-l", "14000"]
+CMD ["serve", "-s", "dist", "-l", "14000"]
