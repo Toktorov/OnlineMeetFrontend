@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  web:
+    image: node:14
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "14000:3000"
+    command: sh -c "npm install && npm start"
