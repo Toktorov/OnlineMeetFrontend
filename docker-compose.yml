@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  web:
+  web_online_meet_frontend:
     image: node:14
     working_dir: /app
     volumes:
@@ -8,3 +8,32 @@ services:
     ports:
       - "14000:3000"
     command: sh -c "npm install && npm start"
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-linux-arm-musleabihf@4.34.9: wanted {"os":"linux","arch":"arm"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-win32-ia32-msvc@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-win32-ia32-msvc):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-win32-ia32-msvc@4.34.9: wanted {"os":"win32","arch":"ia32"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-linux-loongarch64-gnu@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-linux-loongarch64-gnu):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-linux-loongarch64-gnu@4.34.9: wanted {"os":"linux","arch":"loong64"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-linux-riscv64-gnu@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-linux-riscv64-gnu):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-linux-riscv64-gnu@4.34.9: wanted {"os":"linux","arch":"riscv64"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-linux-powerpc64le-gnu@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-linux-powerpc64le-gnu):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-linux-powerpc64le-gnu@4.34.9: wanted {"os":"linux","arch":"ppc64"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-linux-s390x-gnu@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-linux-s390x-gnu):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-linux-s390x-gnu@4.34.9: wanted {"os":"linux","arch":"s390x"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-darwin-x64@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-darwin-x64):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-darwin-x64@4.34.9: wanted {"os":"darwin","arch":"x64"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-win32-x64-msvc@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-win32-x64-msvc):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-win32-x64-msvc@4.34.9: wanted {"os":"win32","arch":"x64"} (current: {"os":"linux","arch":"x64"})
+web_1  | npm WARN optional SKIPPING OPTIONAL DEPENDENCY: @rollup/rollup-freebsd-x64@4.34.9 (node_modules/rollup/node_modules/@rollup/rollup-freebsd-x64):
+web_1  | npm WARN notsup SKIPPING OPTIONAL DEPENDENCY: Unsupported platform for @rollup/rollup-freebsd-x64@4.34.9: wanted {"os":"freebsd","arch":"x64"} (current: {"os":"linux","arch":"x64"})
+web_1  | 
+web_1  | added 283 packages from 334 contributors and audited 362 packages in 42.783s
+web_1  | 
+web_1  | 82 packages are looking for funding
+web_1  |   run `npm fund` for details
+web_1  | 
+web_1  | found 0 vulnerabilities
+web_1  | 
+web_1  | npm ERR! missing script: start
+web_1  | 
+web_1  | npm ERR! A complete log of this run can be found in:
+web_1  | npm ERR!     /root/.npm/_logs/2025-03-03T16_09_55_746Z-debug.log
