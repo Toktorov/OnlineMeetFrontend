@@ -1,7 +1,7 @@
 import axios from "axios";
 
-const REGISTER_API_URL = "https://meet.arzanall.kg/api/v1/users/users/";
-const AUTH_API_URL = "https://meet.arzanall.kg/api/v1/users/login/";
+const REGISTER_API_URL = "http://127.0.0.1:8000/api/v1/users/user/";
+const AUTH_API_URL = "http://127.0.0.1:8000/api/v1/users/login/";
 
 export const registerUser = async (data: {
   username: string;

@@ -27,7 +27,7 @@ export default function Home() {
         return;
       }
       
-      const response = await axios.post("https://meet.arzanall.kg/api/v1/meet/meets/", {}, {
+      const response = await axios.post("http://127.0.0.1:8000/api/v1/meet/meets/", {}, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -42,7 +42,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 white:bg-gray-900 shadow-md w-full fixed top-0 z-10">
+    <div className="flex flex-col min-h-screen bg-gray-100 white:bg-gray-900 shadow-md w-full">
       <header className="flex justify-between items-center p-4 bg-white white:bg-gray-800 shadow-md w-full fixed top-0 z-10">
         <h1 className="text-2xl font-bold text-gray-800 white:text-white">Online Meet</h1>
         <div>
