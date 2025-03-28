@@ -41,6 +41,9 @@ export default function Home() {
     }
   };
 
+  console.log('Проверка');
+  
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 white:bg-gray-900 shadow-md w-full fixed top-0 z-10">
       <header className="flex justify-between items-center p-4 bg-white white:bg-gray-800 shadow-md w-full fixed top-0 z-10">
