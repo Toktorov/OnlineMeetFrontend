@@ -30,13 +30,13 @@ export default function Register() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6 shadow-md w-full fixed top-0 z-10">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
+    <div className='flex min-h-screen items-center justify-center bg-gray-50 p-6 shadow-md w-full fixed top-0 z-10'>
+      <div className={`max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg`}>
         <div className="text-center">
           <h2 className="text-3xl font-extrabold text-gray-900">Регистрация</h2>
           <p className="text-gray-500">Создайте аккаунт, чтобы начать</p>
+          {error && <p className="text-red-500 text-center pt-3">{error}</p>}
         </div>
-        {error && <p className="text-red-500 text-center">{error}</p>}
         {success ? (
           <p className="text-green-500 text-center">Регистрация успешна! <Link to="/login" className="text-blue-500">Войти</Link></p>
         ) : (
