@@ -35,30 +35,17 @@ const PreConversation: React.FC<PreConversationProps> = ({
   const animationFrameRef = useRef<number | null>(null); // To cancel requestAnimationFrame
 
   useEffect(() => {
-    console.log("PreConversation mounted with props:", {
-      videoStream,
-      localVideoRef: localVideoRef.current,
-      isVideoOn,
-      isAudioOn,
-    });
-
     if (!videoStream || !localVideoRef.current) {
-      console.log("Skipping local video playback in PreConversation: videoStream or localVideoRef not ready", {
-        videoStream,
-        localVideoRef: localVideoRef.current,
-      });
       return;
     }
 
     const videoElement = localVideoRef.current;
-    console.log("Setting local video srcObject in PreConversation:", videoStream);
     videoElement.srcObject = videoStream;
 
     // Ensure video track is enabled based on isVideoOn
     const videoTrack = videoStream.getVideoTracks()[0];
     if (videoTrack) {
       videoTrack.enabled = isVideoOn;
-      console.log(`Video track enabled: ${videoTrack.enabled}`);
 
       // If the video track is re-enabled, ensure the video element resumes playback
       if (videoTrack.enabled && videoElement.paused) {
@@ -72,9 +59,7 @@ const PreConversation: React.FC<PreConversationProps> = ({
     const playVideo = async () => {
       try {
         if (videoElement.paused && videoStream.active && isVideoOn) {
-          console.log("Attempting to play local video in PreConversation");
           await videoElement.play();
-          console.log("Local video playing successfully in PreConversation");
           setNeedsPlayTrigger(false);
         }
       } catch (err) {
@@ -88,23 +73,13 @@ const PreConversation: React.FC<PreConversationProps> = ({
 
     playVideo();
 
-    // Log audio track status
-    const audioTracks = videoStream.getAudioTracks();
-    console.log("Audio tracks in PreConversation:", audioTracks);
-    audioTracks.forEach(track => {
-      console.log(`Audio track (id: ${track.id}) enabled: ${track.enabled}`);
-    });
-
     return () => {
-      console.log("Cleaning up PreConversation");
       if (videoElement) {
         videoElement.pause();
         videoElement.srcObject = null;
-        console.log("Cleared local video srcObject in PreConversation");
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
-        console.log("Cancelled requestAnimationFrame in PreConversation");
       }
     };
   }, [videoStream, localVideoRef, isVideoOn]); // Include isVideoOn in dependencies to handle toggle
@@ -134,7 +109,6 @@ const PreConversation: React.FC<PreConversationProps> = ({
     const checkAudioLevel = () => {
       // Double-check isMicActive to prevent rescheduling
       if (isMicActive) {
-        console.log("Microphone already confirmed active, stopping audio level checks");
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
           animationFrameRef.current = null;
@@ -144,9 +118,7 @@ const PreConversation: React.FC<PreConversationProps> = ({
 
       analyser.getByteFrequencyData(dataArray);
       const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-      console.log("Microphone audio level:", average);
       if (average > 0) {
-        console.log("Microphone is active and detecting sound");
         setIsMicActive(true); // Set flag to stop further logging
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
@@ -164,11 +136,9 @@ const PreConversation: React.FC<PreConversationProps> = ({
 
     return () => {
       audioContext.close();
-      console.log("Audio context closed in PreConversation");
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
-        console.log("Cancelled requestAnimationFrame on cleanup");
       }
     };
   }, [videoStream, isMicActive]);
@@ -270,7 +240,6 @@ const PreConversation: React.FC<PreConversationProps> = ({
           </button>
           <button
             onClick={() => {
-              console.log("Leave Meeting button clicked");
               leaveMeeting();
             }}
             className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-all duration-300 shadow-md hover:shadow-lg"

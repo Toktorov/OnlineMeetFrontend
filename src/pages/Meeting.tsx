@@ -13,10 +13,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import SimplePeer, { Instance as SimplePeerInstance } from "simple-peer";
 import { io, Socket } from "socket.io-client";
+import { w3cwebsocket as W3CWebSocket } from "websocket";
 import toast, { Toaster } from "react-hot-toast";
 import { FiCopy, FiUsers } from "react-icons/fi";
 import PreConversation from "../components/PreConversation";
 import InMeeting from "../components/InMeeting";
+import { refreshToken } from "../api/auth";
 
 interface UserData {
   username: string;
@@ -31,7 +33,8 @@ interface Participant {
 
 interface MeetParticipant {
   id: string;
-  user: string;
+  user: string | null;
+  guest_name: string | null;
   role: string;
   joined_at: string;
   left_at: string | null;
@@ -68,11 +71,18 @@ export default function Meeting() {
   const [isStreamStarted, setIsStreamStarted] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [usernames, setUsernames] = useState<Map<string, string>>(new Map());
+  const [translationSocket, setTranslationSocket] = useState<W3CWebSocket | null>(null);
+  const [targetLanguage, setTargetLanguage] = useState("english");
+  const [isGestureMode, setIsGestureMode] = useState(false);
   const socketIdToUserIdRef = useRef<Map<string, string>>(new Map());
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const videoPeersRef = useRef<Map<string, SimplePeerInstance>>(new Map());
   const screenSharePeersRef = useRef<Map<string, SimplePeerInstance>>(new Map());
+  const audioRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const isLeavingRef = useRef(false);
   const hasFetchedStreamRef = useRef(false);
 
@@ -97,19 +107,32 @@ export default function Meeting() {
   const fetchUserData = async () => {
     try {
       const userId = localStorage.getItem("userId");
-      const accessToken = localStorage.getItem("accessToken");
+      let accessToken = localStorage.getItem("accessToken");
       if (!userId || !accessToken) {
         setError("User not authorized");
         return null;
       }
 
-      const response = await axios.get(`http://127.0.0.1:8000/api/v1/users/user/${userId}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      setUserData(response.data);
-      return userId;
+      try {
+        const response = await axios.get(`http://127.0.0.1:8000/api/v1/users/user/${userId}/`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        setUserData(response.data);
+        await fetchMeetingData();
+        return userId;
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          accessToken = await refreshToken();
+          const response = await axios.get(`http://127.0.0.1:8000/api/v1/users/user/${userId}/`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          setUserData(response.data);
+          await fetchMeetingData();
+          return userId;
+        }
+        throw err;
+      }
     } catch (err) {
-      console.error("Error fetching user data:", err);
       setError("Error loading user data");
       return null;
     }
@@ -117,40 +140,84 @@ export default function Meeting() {
 
   const fetchMeetingData = async () => {
     try {
-      const accessToken = localStorage.getItem("accessToken");
+      let accessToken = localStorage.getItem("accessToken");
       if (!accessToken) {
         setError("User not authorized");
         return false;
       }
 
-      const response = await axios.get<MeetingResponse>(`http://127.0.0.1:8000/api/v1/meet/meets/${roomId}/`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      setMeetingData(response.data);
-      console.log("Updated meetingData:", response.data);
-      return true;
+      try {
+        const response = await axios.get<MeetingResponse>(`http://127.0.0.1:8000/api/v1/meet/meets/${roomId}/`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        setMeetingData(response.data);
+        return true;
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          accessToken = await refreshToken();
+          const response = await axios.get<MeetingResponse>(`http://127.0.0.1:8000/api/v1/meet/meets/${roomId}/`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          setMeetingData(response.data);
+          return true;
+        }
+        throw err;
+      }
     } catch (err) {
-      console.error("Error fetching meeting data:", err);
       setError("Failed to load meeting data. The meeting may not exist.");
       return false;
     }
   };
 
+  const fetchUsername = async (userId: string) => {
+    try {
+      let accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) return "Unknown";
+
+      try {
+        const response = await axios.get(`http://127.0.0.1:8000/api/v1/users/user/${userId}/`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        return response.data.username || "Unknown";
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          accessToken = await refreshToken();
+          const response = await axios.get(`http://127.0.0.1:8000/api/v1/users/user/${userId}/`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          return response.data.username || "Unknown";
+        }
+        throw err;
+      }
+    } catch (err) {
+      return "Unknown";
+    }
+  };
+
+  const fetchAllUsernames = async (participantIds: string[]) => {
+    const usernameMap = new Map<string, string>();
+    if (userData) usernameMap.set(userData.id, userData.username);
+
+    for (const userId of participantIds) {
+      if (userId === userData?.id || usernameMap.has(userId)) continue;
+      const username = await fetchUsername(userId);
+      usernameMap.set(userId, username);
+    }
+
+    setUsernames(usernameMap);
+  };
+
   const getUserMedia = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      stream.getAudioTracks().forEach(track => track.enabled = false); // Mute WebRTC audio
       setVideoStream(stream);
-      console.log("Video stream tracks:", stream.getTracks());
-
       const videoTrack = stream.getVideoTracks()[0];
       const audioTrack = stream.getAudioTracks()[0];
       setIsVideoOn(videoTrack.enabled);
       setIsAudioOn(audioTrack.enabled);
-
       return stream;
     } catch (err) {
-      console.error("Error accessing camera and microphone:", err);
       setError("Error accessing camera and microphone");
       return null;
     }
@@ -170,17 +237,41 @@ export default function Meeting() {
     }
 
     if (socketRef.current) {
-      socketRef.current.emit("join-room", roomId, userId);
+      const accessToken = localStorage.getItem("accessToken");
+      socketRef.current.emit("join-room", roomId, userId, accessToken);
       setIsStreamStarted(true);
 
       const socketId = socketRef.current.id;
-      if (socketId && userId) {
-        socketIdToUserIdRef.current.set(socketId, userId);
-      }
+      if (socketId && userId) socketIdToUserIdRef.current.set(socketId, userId);
     } else {
-      console.error("Socket is not initialized in startStream");
       setError("Failed to connect to the video meeting server");
     }
+  };
+
+  const fetchParticipants = () => {
+    return new Promise<Participant[]>((resolve) => {
+      if (!socketRef.current) {
+        console.error("[fetchParticipants] Socket is not connected");
+        resolve([]);
+        return;
+      }
+
+      const attemptFetch = (attempt: number) => {
+        console.log(`[fetchParticipants] Attempt ${attempt}: Emitting get-participants event for room:`, roomId);
+        socketRef.current.emit("get-participants", roomId, (participants: Participant[]) => {
+          console.log(`[fetchParticipants] Attempt ${attempt}: Received participants:`, participants);
+          if (participants.length === 0 && attempt < 3) {
+            console.warn(`[fetchParticipants] Attempt ${attempt}: No participants received, retrying...`);
+            setTimeout(() => attemptFetch(attempt + 1), 500);
+          } else {
+            setParticipants(participants);
+            resolve(participants);
+          }
+        });
+      };
+
+      attemptFetch(1);
+    });
   };
 
   const startScreenShare = async () => {
@@ -189,18 +280,33 @@ export default function Meeting() {
       return;
     }
 
+    if (!userData?.id) {
+      console.error("[startScreenShare] userData.id is undefined, cannot start screen sharing");
+      return;
+    }
+
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       setIsScreenSharing(true);
       setScreenShareStream(screenStream);
-      setScreenShareUserId(userData?.id || null);
-      console.log("Screen share stream tracks:", screenStream.getTracks());
+      setScreenShareUserId(userData.id);
 
       if (socketRef.current) {
-        socketRef.current.emit("screen-share-start", { roomId, userId: userData?.id });
+        socketRef.current.emit("screen-share-start", { roomId, userId: userData.id });
 
-        participants.forEach(({ userId }) => {
-          if (userId === userData?.id) return;
+        let latestParticipants = await fetchParticipants();
+        if (latestParticipants.length === 0) latestParticipants = participants;
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        if (latestParticipants.length === 0) {
+          console.error("[startScreenShare] No participants available to share screen with");
+          toast.error("No participants available to share screen with");
+          return;
+        }
+
+        latestParticipants.forEach(({ userId }) => {
+          if (userId === userData.id) return;
 
           const peer = new SimplePeer({
             initiator: true,
@@ -210,31 +316,13 @@ export default function Meeting() {
           });
 
           peer.on("signal", (signal) => {
-            console.log(`Sending screen-share signal to user ${userId} (type: screen-share):`, signal);
             socketRef.current?.emit("signal", { roomId, userId, signal, type: "screen-share" });
           });
 
           peer.on("error", (err) => {
-            console.error(`Screen share peer error for user ${userId}:`, err);
-            if (!(peer as any).destroyed) {
-              (peer as any).destroy();
-              screenSharePeersRef.current.delete(userId);
-            }
-          });
-
-          peer.on("connect", () => {
-            console.log(`Screen-sharing peer connected with user ${userId}`);
-          });
-
-          peer.on("iceStateChange", (iceConnectionState) => {
-            console.log(`ICE connection state for screen-share peer ${userId}: ${iceConnectionState}`);
-            if (iceConnectionState === "failed") {
-              console.error(`ICE connection failed for screen-share peer ${userId}`);
-              if (!(peer as any).destroyed) {
-                (peer as any).destroy();
-                screenSharePeersRef.current.delete(userId);
-              }
-            }
+            console.error(`[startScreenShare] Screen share peer error for user ${userId}:`, err);
+            if (!(peer as any).destroyed) peer.destroy();
+            screenSharePeersRef.current.delete(userId);
           });
 
           screenSharePeersRef.current.set(userId, peer);
@@ -245,29 +333,20 @@ export default function Meeting() {
           setScreenShareStream(null);
           setScreenShareUserId(null);
           if (socketRef.current) {
-            socketRef.current.emit("screen-share-stop", { roomId, userId: userData?.id });
+            socketRef.current.emit("screen-share-stop", { roomId, userId: userData.id });
           }
-
-          screenSharePeersRef.current.forEach((peer, userId) => {
-            if (!(peer as any).destroyed) {
-              (peer as any).destroy();
-              screenSharePeersRef.current.delete(userId);
-            }
-          });
-
+          screenSharePeersRef.current.forEach(peer => peer.destroy());
+          screenSharePeersRef.current.clear();
+          setRemoteScreenShareStreams(new Map());
           if (videoStream && localVideoRef.current) {
             localVideoRef.current.srcObject = videoStream;
-            localVideoRef.current.play().catch(err => {
-              console.error("Error replaying local video after screen share stop:", err);
-            });
+            localVideoRef.current.play().catch(err => console.error("Error replaying local video:", err));
           }
-
-          setRemoteScreenShareStreams(new Map());
           toast.success("Screen sharing ended", { position: "top-center" });
         };
       }
     } catch (err: any) {
-      console.error("Error starting screen share:", err);
+      console.error("[startScreenShare] Error starting screen share:", err);
       if (err.name === "NotAllowedError") {
         toast("Screen sharing canceled", { position: "top-center" });
       } else {
@@ -284,205 +363,70 @@ export default function Meeting() {
     }
   };
 
-  const onConnect = () => {
-    console.log("Connected to signaling server");
+  const setupTranslationSocket = () => {
+    const ws = new W3CWebSocket(`ws://localhost:8000/ws/translate/${roomId}/`);
+    ws.onopen = () => {
+      console.log("Translation WebSocket connected");
+      ws.send(JSON.stringify({ language: targetLanguage, gesture: isGestureMode }));
+    };
+    ws.onmessage = (event) => {
+      const audioBlob = new Blob([event.data], { type: "audio/mp3" });
+      const audio = new Audio(URL.createObjectURL(audioBlob));
+      audio.play().catch(err => console.error("Error playing translated audio:", err));
+    };
+    ws.onerror = (err) => console.error("Translation WebSocket error:", err);
+    ws.onclose = () => console.log("Translation WebSocket closed");
+    setTranslationSocket(ws);
   };
 
-  const onConnectError = (err: any) => {
-    console.error("Socket connection error:", err);
-    setError("Error connecting to the video meeting server");
-  };
+  const startAudioStreaming = () => {
+    if (!videoStream) return;
 
-  const onDisconnect = (reason: string) => {
-    console.log("Disconnected from signaling server:", reason);
-    setError("Disconnected from the video meeting server");
-  };
+    const audioStream = new MediaStream(videoStream.getAudioTracks());
+    audioStream.getAudioTracks().forEach(track => track.enabled = true); // Enable for translation
+    const recorder = new MediaRecorder(audioStream, { mimeType: "audio/webm;codecs=pcm" });
+    audioRecorderRef.current = recorder;
 
-  const onParticipants = (participants: Participant[]) => {
-    console.log("Received participants:", participants);
-    setParticipants(participants);
-    participants.forEach(({ socketId, userId }) => {
-      socketIdToUserIdRef.current.set(socketId, userId);
-    });
-    fetchMeetingData();
-  };
-
-  const onUserConnected = (data: { socketId: string; userId: string }) => {
-    console.log("User connected:", data);
-    socketIdToUserIdRef.current.set(data.socketId, data.userId);
-    setParticipants(prev => [...prev, { socketId: data.socketId, userId: data.userId }]);
-    fetchMeetingData();
-
-    if (screenShareStream && userData?.id === screenShareUserId && data.userId !== userData?.id) {
-      const peer = new SimplePeer({
-        initiator: true,
-        trickle: true,
-        stream: screenShareStream,
-        config: { iceServers },
-      });
-
-      peer.on("signal", (signal) => {
-        socketRef.current?.emit("signal", { roomId, userId: data.userId, signal, type: "screen-share" });
-      });
-
-      peer.on("error", (err) => {
-        console.error(`Screen share peer error for user ${data.userId}:`, err);
-        if (!(peer as any).destroyed) peer.destroy();
-      });
-
-      screenSharePeersRef.current.set(data.userId, peer);
-    }
-  };
-
-  const onSignal = (data: { senderSocketId: string; signal: any; type?: string }) => {
-    const { senderSocketId, signal, type } = data;
-    console.log(`Received signal from socket ${senderSocketId} (type: ${type}):`, signal);
-
-    if (!type || !["video", "screen-share"].includes(type)) {
-      console.error(`Invalid or missing signal type from socket ${senderSocketId}. Type: ${type}`);
-      return;
-    }
-
-    const senderUserId = socketIdToUserIdRef.current.get(senderSocketId);
-    if (!senderUserId) {
-      console.error(`Could not map socket.id ${senderSocketId} to a userId`);
-      return;
-    }
-
-    const isScreenShare = type === "screen-share";
-    const peerRef = isScreenShare ? screenSharePeersRef : videoPeersRef;
-    let peer = peerRef.current.get(senderUserId);
-
-    if (!peer) {
-      console.log(`Creating new peer for user ${senderUserId} (type: ${type})`);
-      peer = new SimplePeer({
-        initiator: false,
-        trickle: true,
-        config: { iceServers },
-      });
-
-      peer.on("signal", (signal) => {
-        console.log(`Sending ${type} signal to user ${senderUserId}:`, signal);
-        socketRef.current?.emit("signal", { roomId, userId: senderUserId, signal, type });
-      });
-
-      peer.on("stream", (remoteStream) => {
-        console.log(`Received ${type} stream from user ${senderUserId}:`, remoteStream);
-        if (isScreenShare) {
-          setRemoteScreenShareStreams(prev => {
-            const newStreams = new Map(prev);
-            newStreams.set(senderUserId, remoteStream);
-            console.log("Updated remoteScreenShareStreams:", Array.from(newStreams.entries()));
-            return newStreams;
-          });
-        } else {
-          setRemoteStreams(prev => {
-            const newStreams = new Map(prev);
-            newStreams.set(senderUserId, remoteStream);
-            console.log("Updated remoteStreams:", Array.from(newStreams.entries()));
-            return newStreams;
-          });
-        }
-      });
-
-      peer.on("error", (err) => {
-        console.error(`${type} peer error for user ${senderUserId}:`, err);
-        if (!(peer as any).destroyed) {
-          (peer as any).destroy();
-          peerRef.current.delete(senderUserId);
-          if (!isScreenShare) {
-            setRemoteStreams(prev => {
-              const newStreams = new Map(prev);
-              newStreams.delete(senderUserId);
-              return newStreams;
-            });
-          }
-        }
-      });
-
-      peer.on("connect", () => {
-        console.log(`${type} peer connected with user ${senderUserId}`);
-      });
-
-      peerRef.current.set(senderUserId, peer);
-    }
-
-    if (peer && !(peer as any).destroyed) {
-      console.log(`Signaling peer for user ${senderUserId} (type: ${type})`);
-      try {
-        peer.signal(signal);
-      } catch (err) {
-        console.error(`Error signaling peer for user ${senderUserId}:`, err);
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0 && translationSocket?.readyState === WebSocket.OPEN) {
+        event.data.arrayBuffer().then(buffer => translationSocket.send(buffer));
       }
+    };
+
+    recorder.start(200); // 200ms chunks
+    console.log("Started audio streaming for translation");
+  };
+
+  const startGestureStreaming = () => {
+    if (!videoStream || !videoRef.current || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+
+    videoRef.current.srcObject = videoStream;
+    videoRef.current.play();
+
+    const sendFrame = () => {
+      if (!isGestureMode || translationSocket?.readyState !== WebSocket.OPEN) return;
+      context.drawImage(videoRef.current!, 0, 0, 640, 480);
+      const frameData = canvas.toDataURL("image/jpeg", 0.5).split(",")[1];
+      translationSocket.send(JSON.stringify({ video_frame: frameData }));
+      setTimeout(sendFrame, 200); // ~5 FPS
+    };
+    sendFrame();
+  };
+
+  const handleLanguageChange = (lang: string) => {
+    setTargetLanguage(lang);
+    if (translationSocket?.readyState === WebSocket.OPEN) {
+      translationSocket.send(JSON.stringify({ language: lang, gesture: isGestureMode }));
     }
   };
 
-  const onUserDisconnected = (userId: string) => {
-    console.log("User disconnected:", userId);
-
-    const videoPeer = videoPeersRef.current.get(userId);
-    if (videoPeer) {
-      if (!(videoPeer as any).destroyed) (videoPeer as any).destroy();
-      videoPeersRef.current.delete(userId);
-      setRemoteStreams(prev => {
-        const newStreams = new Map(prev);
-        newStreams.delete(userId);
-        return newStreams;
-      });
-    }
-
-    const screenPeer = screenSharePeersRef.current.get(userId);
-    if (screenPeer) {
-      if (!(screenPeer as any).destroyed) (screenPeer as any).destroy();
-      screenSharePeersRef.current.delete(userId);
-      setRemoteScreenShareStreams(prev => {
-        const newStreams = new Map(prev);
-        newStreams.delete(userId);
-        return newStreams;
-      });
-    }
-
-    if (screenShareUserId === userId) {
-      setScreenShareUserId(null);
-      setRemoteScreenShareStreams(new Map());
-      setIsScreenSharing(false);
-      setScreenShareStream(null);
-    }
-
-    const socketId = Array.from(socketIdToUserIdRef.current.entries()).find(
-      ([_, uId]) => uId === userId
-    )?.[0];
-    if (socketId) {
-      socketIdToUserIdRef.current.delete(socketId);
-    }
-    setParticipants(prev => prev.filter(p => p.userId !== userId));
-    fetchMeetingData();
-  };
-
-  const onScreenShareStart = (data: { userId: string }) => {
-    console.log("Screen share started by user:", data.userId);
-    setScreenShareUserId(data.userId);
-  };
-
-  const onScreenShareStop = (data: { userId: string }) => {
-    console.log("Screen share stopped by user:", data.userId);
-    setScreenShareUserId(null);
-    setRemoteScreenShareStreams(new Map());
-    setIsScreenSharing(false);
-    setScreenShareStream(null);
-
-    screenSharePeersRef.current.forEach((peer, userId) => {
-      if (!(peer as any).destroyed) {
-        (peer as any).destroy();
-        screenSharePeersRef.current.delete(userId);
-      }
-    });
-
-    if (videoStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = videoStream;
-      localVideoRef.current.play().catch(err => {
-        console.error("Error replaying local video after screen share stop:", err);
-      });
+  const toggleGestureMode = () => {
+    setIsGestureMode(prev => !prev);
+    if (translationSocket?.readyState === WebSocket.OPEN) {
+      translationSocket.send(JSON.stringify({ language: targetLanguage, gesture: !isGestureMode }));
     }
   };
 
@@ -495,37 +439,169 @@ export default function Meeting() {
     });
     socketRef.current = socket;
 
-    socketRef.current.on("connect", onConnect);
-    socketRef.current.on("connect_error", onConnectError);
-    socketRef.current.on("disconnect", onDisconnect);
-    socketRef.current.on("participants", onParticipants);
-    socketRef.current.on("user-connected", onUserConnected);
-    socketRef.current.on("signal", onSignal);
-    socketRef.current.on("user-disconnected", onUserDisconnected);
-    socketRef.current.on("screen-share-start", onScreenShareStart);
-    socketRef.current.on("screen-share-stop", onScreenShareStop);
+    socket.on("connect", () => console.log("Connected to signaling server"));
+    socket.on("connect_error", (err) => setError("Error connecting to the video meeting server"));
+    socket.on("disconnect", (reason) => {
+      if (!isLeavingRef.current) setError("Disconnected from the video meeting server");
+    });
+    socket.on("participants", (participants: Participant[]) => {
+      setParticipants(participants);
+      participants.forEach(({ socketId, userId }) => socketIdToUserIdRef.current.set(socketId, userId));
+      fetchMeetingData();
+    });
+    socket.on("user-connected", (data: { socketId: string; userId: string }) => {
+      socketIdToUserIdRef.current.set(data.socketId, data.userId);
+      setParticipants(prev => [...prev.filter(p => p.userId !== data.userId), { socketId: data.socketId, userId: data.userId }]);
+      fetchMeetingData();
+    });
+    socket.on("signal", (data: { senderSocketId: string; signal: any; type?: string }) => {
+      const senderUserId = socketIdToUserIdRef.current.get(data.senderSocketId);
+      if (!senderUserId) return;
+
+      const isScreenShare = data.type === "screen-share";
+      const peerRef = isScreenShare ? screenSharePeersRef : videoPeersRef;
+      let peer = peerRef.current.get(senderUserId);
+
+      if (!peer && userData) {
+        peer = new SimplePeer({
+          initiator: isScreenShare ? false : userData.id < senderUserId,
+          trickle: true,
+          stream: isScreenShare ? screenShareStream : videoStream,
+          config: { iceServers },
+        });
+
+        peer.on("signal", (signal) => {
+          socketRef.current?.emit("signal", { roomId, userId: senderUserId, signal, type: data.type });
+        });
+
+        peer.on("stream", (remoteStream) => {
+          if (isScreenShare) {
+            setRemoteScreenShareStreams(prev => new Map(prev).set(senderUserId, remoteStream));
+          } else {
+            setRemoteStreams(prev => new Map(prev).set(senderUserId, remoteStream));
+          }
+        });
+
+        peer.on("error", () => {
+          if (!(peer as any).destroyed) peer.destroy();
+          peerRef.current.delete(senderUserId);
+        });
+
+        peerRef.current.set(senderUserId, peer);
+      }
+
+      if (peer && !(peer as any).destroyed) peer.signal(data.signal);
+    });
+    socket.on("user-disconnected", (userId: string) => {
+      const videoPeer = videoPeersRef.current.get(userId);
+      if (videoPeer && !(videoPeer as any).destroyed) {
+        videoPeer.destroy();
+        videoPeersRef.current.delete(userId);
+        setRemoteStreams(prev => {
+          const newStreams = new Map(prev);
+          newStreams.delete(userId);
+          return newStreams;
+        });
+      }
+
+      const screenPeer = screenSharePeersRef.current.get(userId);
+      if (screenPeer && !(screenPeer as any).destroyed) {
+        screenPeer.destroy();
+        screenSharePeersRef.current.delete(userId);
+        setRemoteScreenShareStreams(prev => {
+          const newStreams = new Map(prev);
+          newStreams.delete(userId);
+          return newStreams;
+        });
+      }
+
+      if (screenShareUserId === userId) {
+        setScreenShareUserId(null);
+        setRemoteScreenShareStreams(new Map());
+      }
+
+      setParticipants(prev => prev.filter(p => p.userId !== userId));
+      fetchMeetingData();
+    });
+    socket.on("screen-share-start", (data: { userId: string }) => {
+      setScreenShareUserId(data.userId);
+      if (data.userId !== userData?.id) {
+        const peer = new SimplePeer({ initiator: false, trickle: true, config: { iceServers } });
+        peer.on("signal", (signal) => {
+          socketRef.current?.emit("signal", { roomId, userId: data.userId, signal, type: "screen-share" });
+        });
+        peer.on("stream", (remoteStream) => {
+          setRemoteScreenShareStreams(prev => new Map(prev).set(data.userId, remoteStream));
+        });
+        peer.on("error", () => {
+          if (!(peer as any).destroyed) peer.destroy();
+          screenSharePeersRef.current.delete(data.userId);
+        });
+        screenSharePeersRef.current.set(data.userId, peer);
+      }
+    });
+    socket.on("screen-share-stop", (data: { userId: string }) => {
+      setScreenShareUserId(null);
+      setRemoteScreenShareStreams(new Map());
+      setIsScreenSharing(false);
+      setScreenShareStream(null);
+      screenSharePeersRef.current.forEach(peer => peer.destroy());
+      screenSharePeersRef.current.clear();
+      if (videoStream && localVideoRef.current) {
+        localVideoRef.current.srcObject = videoStream;
+        localVideoRef.current.play().catch(err => console.error("Error replaying local video:", err));
+      }
+    });
+    socket.on("new-user-joined-for-screen-share", (data: { newUserId: string; newSocketId: string }) => {
+      if (screenShareUserId !== userData?.id || !screenShareStream) return;
+      const peer = new SimplePeer({
+        initiator: true,
+        trickle: true,
+        stream: screenShareStream,
+        config: { iceServers },
+      });
+      peer.on("signal", (signal) => {
+        socketRef.current?.emit("signal", { roomId, userId: data.newUserId, signal, type: "screen-share" });
+      });
+      peer.on("error", () => {
+        if (!(peer as any).destroyed) peer.destroy();
+        screenSharePeersRef.current.delete(data.newUserId);
+      });
+      screenSharePeersRef.current.set(data.newUserId, peer);
+      socketIdToUserIdRef.current.set(data.newSocketId, data.newUserId);
+    });
+
+    setupTranslationSocket();
+
+    const loadPreviewStream = async () => {
+      const userId = await fetchUserData();
+      if (!userId) return;
+
+      const meetingExists = await fetchMeetingData();
+      if (!meetingExists) return;
+
+      if (!videoStream && !hasFetchedStreamRef.current) {
+        hasFetchedStreamRef.current = true;
+        await getUserMedia();
+      }
+    };
+    loadPreviewStream();
 
     return () => {
-      console.log("Cleaning up socket on unmount or roomId change");
-      if (socketRef.current) {
-        socketRef.current.off("connect", onConnect);
-        socketRef.current.off("connect_error", onConnectError);
-        socketRef.current.off("disconnect", onDisconnect);
-        socketRef.current.off("participants", onParticipants);
-        socketRef.current.off("user-connected", onUserConnected);
-        socketRef.current.off("signal", onSignal);
-        socketRef.current.off("user-disconnected", onUserDisconnected);
-        socketRef.current.off("screen-share-start", onScreenShareStart);
-        socketRef.current.off("screen-share-stop", onScreenShareStop);
-      }
+      if (socketRef.current) socketRef.current.disconnect();
+      if (translationSocket) translationSocket.close();
+      if (audioRecorderRef.current) audioRecorderRef.current.stop();
+      if (videoStream) videoStream.getTracks().forEach(track => track.stop());
+      if (screenShareStream) screenShareStream.getTracks().forEach(track => track.stop());
+      videoPeersRef.current.forEach(peer => peer.destroy());
+      screenSharePeersRef.current.forEach(peer => peer.destroy());
+      setVideoStream(null);
+      setScreenShareStream(null);
     };
   }, [roomId]);
 
   useEffect(() => {
-    if (!videoStream || !userData?.id) {
-      console.log("Skipping peer creation: videoStream or userData not ready");
-      return;
-    }
+    if (!videoStream || !userData?.id) return;
 
     participants.forEach(({ userId }) => {
       if (!userId || videoPeersRef.current.has(userId) || userId === userData?.id) return;
@@ -542,53 +618,42 @@ export default function Meeting() {
       });
 
       peer.on("stream", (remoteStream) => {
-        setRemoteStreams(prev => {
-          const newStreams = new Map(prev);
-          newStreams.set(userId, remoteStream);
-          return newStreams;
-        });
+        setRemoteStreams(prev => new Map(prev).set(userId, remoteStream));
       });
 
-      peer.on("error", (err) => {
-        console.error(`Video peer error for user ${userId}:`, err);
-        if (!(peer as any).destroyed) {
-          (peer as any).destroy();
-          videoPeersRef.current.delete(userId);
-          setRemoteStreams(prev => {
-            const newStreams = new Map(prev);
-            newStreams.delete(userId);
-            return newStreams;
-          });
-        }
-      });
-
-      peer.on("connect", () => {
-        console.log(`WebRTC video connection established with user ${userId}`);
+      peer.on("error", () => {
+        if (!(peer as any).destroyed) peer.destroy();
+        videoPeersRef.current.delete(userId);
       });
 
       videoPeersRef.current.set(userId, peer);
     });
   }, [videoStream, userData, participants, roomId]);
 
+  useEffect(() => {
+    if (meetingData?.participants && meetingData.participants.length > 0) {
+      fetchAllUsernames(meetingData.participants);
+    }
+  }, [meetingData]);
+
+  useEffect(() => {
+    if (videoStream && isStreamStarted) {
+      if (isGestureMode) startGestureStreaming();
+      else startAudioStreaming();
+    }
+  }, [videoStream, isStreamStarted, isGestureMode]);
+
   const leaveMeeting = async () => {
     isLeavingRef.current = true;
 
-    if (videoStream) {
-      videoStream.getTracks().forEach(track => track.stop());
-      setVideoStream(null);
-    }
-
-    if (screenShareStream) {
-      screenShareStream.getTracks().forEach(track => track.stop());
-      setScreenShareStream(null);
-      setScreenShareUserId(null);
-      if (socketRef.current) {
-        socketRef.current.emit("screen-share-stop", { roomId, userId: userData?.id });
-      }
-    }
+    if (videoStream) videoStream.getTracks().forEach(track => track.stop());
+    if (screenShareStream) screenShareStream.getTracks().forEach(track => track.stop());
+    if (socketRef.current) socketRef.current.disconnect();
+    if (translationSocket) translationSocket.close();
+    if (audioRecorderRef.current) audioRecorderRef.current.stop();
 
     const accessToken = localStorage.getItem("accessToken");
-    if (accessToken && meetingData && roomId) {
+    if (accessToken && roomId) {
       try {
         await axios.post(
           `http://127.0.0.1:8000/api/v1/meet/meets/${roomId}/leave/`,
@@ -600,20 +665,13 @@ export default function Meeting() {
       }
     }
 
-    videoPeersRef.current.forEach((peer) => {
-      if (!(peer as any).destroyed) (peer as any).destroy();
-    });
+    videoPeersRef.current.forEach(peer => peer.destroy());
+    screenSharePeersRef.current.forEach(peer => peer.destroy());
     videoPeersRef.current.clear();
-
-    screenSharePeersRef.current.forEach((peer) => {
-      if (!(peer as any).destroyed) (peer as any).destroy();
-    });
     screenSharePeersRef.current.clear();
 
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-
+    setVideoStream(null);
+    setScreenShareStream(null);
     setRemoteStreams(new Map());
     setRemoteScreenShareStreams(new Map());
     setIsStreamStarted(false);
@@ -622,10 +680,9 @@ export default function Meeting() {
     setParticipants([]);
     socketIdToUserIdRef.current.clear();
     setMeetingData(null);
+    setUsernames(new Map());
 
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
 
     navigate("/");
   };
@@ -648,34 +705,6 @@ export default function Meeting() {
 
   const connectedParticipantsCount = isStreamStarted ? participants.length + 1 : 0;
 
-  useEffect(() => {
-    const loadPreviewStream = async () => {
-      const userId = await fetchUserData();
-      if (!userId) return;
-
-      const meetingExists = await fetchMeetingData();
-      if (!meetingExists) return;
-
-      if (!videoStream && !hasFetchedStreamRef.current) {
-        hasFetchedStreamRef.current = true;
-        await getUserMedia();
-      }
-    };
-
-    loadPreviewStream();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-      }
-      if (screenShareStream) {
-        screenShareStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center p-6">
@@ -696,7 +725,10 @@ export default function Meeting() {
     <div className="min-h-screen bg-gradient-to-br from-gray-800 to-gray-900 text-white p-6">
       <Toaster />
       <div className="flex items-center justify-between px-6 pt-3">
-        <h1 className="text-3xl font-extrabold tracking-tight text-blue-400 hover:text-blue-300 transition-colors duration-300" style={{ fontFamily: "'Poppins', sans-serif" }}>
+        <h1
+          className="text-3xl font-extrabold tracking-tight text-blue-400 hover:text-blue-300 transition-colors duration-300"
+          style={{ fontFamily: "'Poppins', sans-serif" }}
+        >
           EchoBridge
         </h1>
         <div className="flex items-center gap-4">
@@ -717,6 +749,25 @@ export default function Meeting() {
               {connectedParticipantsCount} Participant(s)
             </p>
           </div>
+          <select
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            value={targetLanguage}
+            className="bg-gray-800 text-white p-2 rounded border border-gray-600 hover:bg-gray-700 transition-all duration-300"
+          >
+            <option value="english">English</option>
+            <option value="german">German</option>
+            <option value="french">French</option>
+          </select>
+          <button
+            onClick={toggleGestureMode}
+            className={`px-4 py-2 rounded-md transition-all duration-300 border-2 ${
+              isGestureMode
+                ? "bg-blue-600 text-white border-blue-400 shadow-[0_0_10px_rgba]"
+                : "bg-gray-800 text-gray-200 border-gray-600 hover:bg-gray-700"
+            }`}
+          >
+            Gesture Mode
+          </button>
         </div>
       </div>
 
@@ -731,6 +782,7 @@ export default function Meeting() {
             screenShareUserId={screenShareUserId}
             localVideoRef={localVideoRef}
             connectedParticipants={meetingData?.meet_participants || []}
+            usernames={usernames}
             isVideoOn={isVideoOn}
             isAudioOn={isAudioOn}
             isScreenSharing={isScreenSharing}
@@ -753,6 +805,8 @@ export default function Meeting() {
           />
         )}
       </div>
+      <video ref={videoRef} autoPlay muted style={{ display: "none" }} />
+      <canvas ref={canvasRef} width={640} height={480} style={{ display: "none" }} />
     </div>
   );
 }

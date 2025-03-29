@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { FiVideo, FiVideoOff, FiMic, FiMicOff, FiMonitor, FiLogOut } from "react-icons/fi";
-import axios from "axios";
 
 interface UserData {
   username: string;
@@ -10,7 +9,8 @@ interface UserData {
 
 interface MeetParticipant {
   id: string;
-  user: string;
+  user: string | null; // Allow null as per the model
+  guest_name: string | null;
   role: string;
   joined_at: string;
   left_at: string | null;
@@ -24,7 +24,8 @@ interface InMeetingProps {
   remoteScreenShareStreams: Map<string, MediaStream>;
   screenShareUserId: string | null;
   localVideoRef: React.RefObject<HTMLVideoElement>;
-  connectedParticipants: MeetParticipant[];
+  connectedParticipants: MeetParticipant[]; // Kept for future use (e.g., roles)
+  usernames: Map<string, string>;
   isVideoOn: boolean;
   isAudioOn: boolean;
   isScreenSharing: boolean;
@@ -43,6 +44,7 @@ const InMeeting: React.FC<InMeetingProps> = ({
   screenShareUserId,
   localVideoRef,
   connectedParticipants,
+  usernames,
   isVideoOn,
   isAudioOn,
   isScreenSharing,
@@ -57,39 +59,12 @@ const InMeeting: React.FC<InMeetingProps> = ({
   const remoteScreenShareRefs = useRef<Map<string, HTMLVideoElement | null>>(new Map());
   const scrollableContainerRef = useRef<HTMLDivElement | null>(null);
   const [needsPlayTrigger, setNeedsPlayTrigger] = useState(false);
-  const [participantUsernames, setParticipantUsernames] = useState<Map<string, string>>(new Map());
   const [shouldScroll, setShouldScroll] = useState(false);
 
   // Log when screenShareUserId changes
   useEffect(() => {
     console.log("InMeeting: screenShareUserId changed:", screenShareUserId);
   }, [screenShareUserId]);
-
-  useEffect(() => {
-    const fetchUsernames = async () => {
-      const accessToken = localStorage.getItem("accessToken");
-      if (!accessToken) {
-        console.error("No access token found");
-        return;
-      }
-      const usernameMap = new Map<string, string>();
-      for (const participant of connectedParticipants) {
-        try {
-          const response = await axios.get<UserData>(
-            `http://127.0.0.1:8000/api/v1/users/user/${participant.user}`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          usernameMap.set(participant.user, response.data.username);
-        } catch (err) {
-          console.error(`Error fetching username for user ${participant.user}:`, err);
-          usernameMap.set(participant.user, "Unknown");
-        }
-      }
-      console.log("Updated username map:", Array.from(usernameMap.entries()));
-      setParticipantUsernames(usernameMap);
-    };
-    if (connectedParticipants.length > 0) fetchUsernames();
-  }, [connectedParticipants]);
 
   // Local video (main view)
   useEffect(() => {
@@ -142,7 +117,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
   // Local video (scrollable column during screen-share)
   useEffect(() => {
     if (!localVideoScrollRef.current || !videoStream) {
-      console.log("Skipping local video scroll setup: ref or stream missing", { ref: localVideoScrollRef.current, stream: videoStream });
       return;
     }
     const videoElement = localVideoScrollRef.current;
@@ -271,7 +245,7 @@ const InMeeting: React.FC<InMeetingProps> = ({
     setNeedsPlayTrigger(false);
   };
 
-  const getParticipantName = (userId: string) => participantUsernames.get(userId) || "Unknown";
+  const getParticipantName = (userId: string) => usernames.get(userId) || "Unknown";
 
   // Log render to confirm UI updates
   console.log("InMeeting render:", { screenShareUserId, remoteScreenShareStreams: Array.from(remoteScreenShareStreams.entries()) });
