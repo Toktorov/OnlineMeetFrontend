@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -26,12 +27,13 @@ a:hover {
   color: #535bf2;
 }
 
-body {
-  margin: 0;
+html, body {
+  height: auto !important;
+  min-height: 100vh !important;
+  overflow-y: auto !important;
   display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  flex-direction: column;
+  background-color: #ffffff !important;
 }
 
 h1 {
@@ -79,4 +81,34 @@ button:focus-visible {
 
 .dark .card {
   background-color: #303134;
+}
+
+/* Custom scrollbar styling */
+.custom-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #6b7280 transparent; /* Thumb color, transparent track */
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px; /* Thin scrollbar */
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent; /* Hide the track */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #6b7280; /* Gray-500 for the thumb */
+  border-radius: 3px; /* Rounded edges */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af; /* Gray-400 on hover */
+}
+
+/* Hide scrollbar buttons (arrows) in Webkit */
+.custom-scrollbar::-webkit-scrollbar-button {
+  display: none;
 }

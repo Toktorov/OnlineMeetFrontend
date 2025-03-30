@@ -1,7 +1,8 @@
 import axios from "axios";
 
-const REGISTER_API_URL = "https://meet.arzanall.kg/api/v1/users/users/";
-const AUTH_API_URL = "https://meet.arzanall.kg/api/v1/users/login/";
+const REGISTER_API_URL = "http://127.0.0.1:8000/api/v1/users/user/";
+const AUTH_API_URL = "http://127.0.0.1:8000/api/v1/users/login/";
+const REFRESH_API_URL = "http://127.0.0.1:8000/api/v1/users/refresh/";
 
 export const registerUser = async (data: {
   username: string;
@@ -39,5 +40,27 @@ export const loginUser = async (data: { username: string; password: string }) =>
     }
   } catch (error: any) {
     throw error.response?.data || "Ошибка авторизации";
+  }
+};
+
+export const refreshToken = async () => {
+  try {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) {
+      throw new Error("No refresh token available");
+    }
+
+    const response = await axios.post(REFRESH_API_URL, { refresh: refreshToken }, {
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (response.status === 200) {
+      const { access } = response.data;
+      localStorage.setItem("accessToken", access);
+      return access;
+    }
+  } catch (error: any) {
+    console.error("Error refreshing token:", error);
+    throw error.response?.data || "Token refresh failed";
   }
 };

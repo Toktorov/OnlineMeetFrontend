@@ -1,10 +1,35 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
+
+// Define the type for the error response from the backend
+interface ErrorResponse {
+  detail?: string;
+  [key: string]: any;
+}
+
+// Define the type for the meeting response
+interface MeetingResponse {
+  id: string;
+  short_code: string;
+  title: string | null;
+  host: string;
+  participants: string[];
+  status: string;
+  is_public: boolean;
+  access_token: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  created: string;
+  meet_participants: any[];
+}
 
 export default function Home() {
   const [whiteMode, setWhiteMode] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [shortCode, setShortCode] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,31 +45,96 @@ export default function Home() {
   };
 
   const createMeeting = async () => {
+    setLoading(true);
+    setError("");
     try {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) {
-        alert("Вы не авторизованы!");
+        setError("Вы не авторизованы!");
+        setLoading(false);
         return;
       }
       
-      const response = await axios.post("https://meet.arzanall.kg/api/v1/meet/meets/", {}, {
+      const response = await axios.post<MeetingResponse>("http://127.0.0.1:8000/api/v1/meet/meets/", {}, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
 
-      const meetingId = response.data.id;
-      navigate(`/meet/${meetingId}`);
+      const shortCode = response.data.short_code;
+      navigate(`/meet/${shortCode}`);
     } catch (error) {
       console.error("Ошибка при создании встречи", error);
-      alert("Ошибка при создании встречи");
+      const axiosError = error as AxiosError<ErrorResponse>;
+      if (axiosError.response) {
+        console.log("Backend error response:", axiosError.response.data);
+        const errorMessage = axiosError.response.data?.detail || JSON.stringify(axiosError.response.data);
+        setError(`Ошибка при создании встречи: ${errorMessage}`);
+      } else {
+        setError("Ошибка при создании встречи: Не удалось подключиться к серверу");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const joinMeeting = async () => {
+    if (!shortCode.trim()) {
+      setError("Пожалуйста, введите код встречи");
+      return;
+    }
+
+    // Strip '#' from the left side of the shortCode
+    const cleanedShortCode = shortCode.replace(/^#/, '').trim();
+
+    const shortCodeRegex = /^[A-Z0-9]{6}$/;
+    if (!shortCodeRegex.test(cleanedShortCode)) {
+      setError("Код встречи должен состоять из 6 символов (A-Z, 0-9)");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const accessToken = localStorage.getItem("accessToken");
+      if (!accessToken) {
+        setError("Вы не авторизованы!");
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get<MeetingResponse>(`http://127.0.0.1:8000/api/v1/meet/meets/${cleanedShortCode}/`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      navigate(`/meet/${response.data.short_code}`);
+    } catch (error) {
+      console.error("Ошибка при присоединении к встрече", error);
+      const axiosError = error as AxiosError<ErrorResponse>;
+      if (axiosError.response) {
+        console.log("Status Code:", axiosError.response.status);
+        console.log("Response Data:", axiosError.response.data);
+        if (axiosError.response.status === 404 || 
+            axiosError.response.data?.detail?.toLowerCase().includes("not found")) {
+          setError("Неверный код встречи");
+        } else {
+          const errorMessage = axiosError.response.data?.detail || JSON.stringify(axiosError.response.data);
+          setError(`Ошибка при присоединении к встрече: ${errorMessage}`);
+        }
+      } else {
+        setError("Ошибка при присоединении к встрече: Не удалось подключиться к серверу");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 white:bg-gray-900 shadow-md w-full fixed top-0 z-10">
+    <div className="flex flex-col min-h-screen bg-gray-100 white:bg-gray-900 shadow-md w-full">
       <header className="flex justify-between items-center p-4 bg-white white:bg-gray-800 shadow-md w-full fixed top-0 z-10">
-        <h1 className="text-2xl font-bold text-gray-800 white:text-white">Online Meet</h1>
+        <h1 className="text-2xl font-bold text-gray-800 white:text-white">EchoBridge</h1>
         <div>
           <button
             className="mr-4 text-gray-700 white:text-white"
@@ -80,22 +170,41 @@ export default function Home() {
           <p className="text-gray-600 white:text-gray-400 mt-4">
             Online Meet обеспечивает видеосвязь для совместной работы и общения — где бы вы ни находились.
           </p>
+          {error && <p className="text-red-500 mt-4">{error}</p>}
           <div className="mt-6 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-            <button onClick={createMeeting} className="bg-blue-600 text-white px-6 py-3 rounded-md shadow-md hover:bg-blue-700 transition w-full md:w-auto">
-              Новая встреча
+            <button
+              onClick={createMeeting}
+              className="bg-blue-600 text-white px-6 py-3 rounded-md shadow-md hover:bg-blue-700 transition w-full md:w-auto disabled:bg-blue-400"
+              disabled={loading}
+            >
+              {loading ? "Создание..." : "Новая встреча"}
             </button>
             <input
               type="text"
               placeholder="Введите код встречи"
+              value={shortCode}
+              onChange={(e) => {
+                setShortCode(e.target.value);
+                setError("");
+              }}
               className="border p-3 rounded-md w-full md:w-56 white:bg-gray-700 white:text-white"
+              disabled={loading}
             />
-            <button className="bg-gray-500 text-white px-4 py-3 rounded-md hover:bg-gray-600 w-full md:w-auto">
-              Присоединиться
+            <button
+              onClick={joinMeeting}
+              className="bg-gray-500 text-white px-4 py-3 rounded-md hover:bg-gray-600 w-full md:w-auto disabled:bg-gray-300"
+              disabled={loading}
+            >
+              {loading ? "Присоединение..." : "Присоединиться"}
             </button>
           </div>
         </div>
         <div className="hidden md:block w-full md:w-1/2">
-          <img src="https://static.vecteezy.com/system/resources/previews/021/817/865/non_2x/business-women-meeting-in-conference-room-illustration-in-doodle-style-png.png" alt="Meeting" className="w-full max-w-md mx-auto" />
+          <img
+            src="https://static.vecteezy.com/system/resources/previews/021/817/865/non_2x/business-women-meeting-in-conference-room-illustration-in-doodle-style-png.png"
+            alt="Meeting"
+            className="w-full max-w-md mx-auto"
+          />
         </div>
       </main>
 
@@ -109,7 +218,7 @@ export default function Home() {
                 {plan === "Basic" ? "Бесплатно" : plan === "Pro" ? "$19/мес" : plan === "Business" ? "$49/мес" : "По запросу"}
               </p>
               <ul className="mt-4 space-y-2 text-gray-700 white:text-gray-300">
-                <li>✅ {plan === "Basic" ? "До 5 языков" : plan === "Pro" ? "До 10 языков" : plan === "Business" ? "30+ языков" : "Все языки"}</li>
+                <li>✅ {plan === "Basic" ? "До 5 языков" : plan === "Pro" ? "До 10 языков" : plan === "Business" ? "30+ языков" : "Все языков"}</li>
                 <li>✅ {plan === "Basic" ? "40 минут встречи" : "Безлимитное время"}</li>
               </ul>
               <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
