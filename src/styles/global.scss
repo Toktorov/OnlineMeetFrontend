@@ -1,6 +1,12 @@
 @use "./variables.scss" as *;
 @use "./mixins.scss" as *;
 
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 body {
   font-family: $font-primary;
   background-color: $light-bg;
@@ -13,21 +19,14 @@ body {
   }
 }
 
-.container {
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 0 1rem;
-  }
-  
-
 .button {
   background-color: $primary;
   color: white;
   padding: 0.8rem 1.5rem;
   border-radius: 6px;
-  transition: 0.3s;
+  transition: background-color 0.3s, color 0.3s;
   &:hover {
     background-color: white;
+    color: $dark-text;
   }
 }
