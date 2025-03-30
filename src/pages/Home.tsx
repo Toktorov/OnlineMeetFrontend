@@ -192,8 +192,7 @@ export default function Home() {
             </button>
             <input
               type="text"
-              placeholder="Enter meeting code"
-              className="border p-3 rounded-md w-full md:w-44 dark:bg-gray-700 dark:text-white"
+              placeholder="Введите код встречи"
               value={shortCode}
               onChange={(e) => {
                 setShortCode(e.target.value);
