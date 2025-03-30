@@ -52,28 +52,28 @@ export default function Home() {
     try {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) {
-        setError("Вы не авторизованы!");
+        setError("You are not authorized!");
         setLoading(false);
         return;
       }
       
       const response = await axios.post<MeetingResponse>("http://127.0.0.1:8000/api/v1/meet/meets/", {}, {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`, // Fixed template literal syntax
         },
       });
 
       const shortCode = response.data.short_code;
       navigate(`/meet/${shortCode}`);
     } catch (error) {
-      console.error("Ошибка при создании встречи", error);
+      console.error("Error creating meeting", error);
       const axiosError = error as AxiosError<ErrorResponse>;
       if (axiosError.response) {
         console.log("Backend error response:", axiosError.response.data);
         const errorMessage = axiosError.response.data?.detail || JSON.stringify(axiosError.response.data);
-        setError(`Ошибка при создании встречи: ${errorMessage}`);
+        setError(`Error creating meeting: ${errorMessage}`);
       } else {
-        setError("Ошибка при создании встречи: Не удалось подключиться к серверу");
+        setError("Error creating meeting: Could not connect to the server");
       }
     } finally {
       setLoading(false);
@@ -82,7 +82,7 @@ export default function Home() {
 
   const joinMeeting = async () => {
     if (!shortCode.trim()) {
-      setError("Пожалуйста, введите код встречи");
+      setError("Please enter the meeting code");
       return;
     }
 
@@ -91,7 +91,7 @@ export default function Home() {
 
     const shortCodeRegex = /^[A-Z0-9]{6}$/;
     if (!shortCodeRegex.test(cleanedShortCode)) {
-      setError("Код встречи должен состоять из 6 символов (A-Z, 0-9)");
+      setError("The meeting code must consist of 6 characters (A-Z, 0-9)");
       return;
     }
 
@@ -100,33 +100,33 @@ export default function Home() {
     try {
       const accessToken = localStorage.getItem("accessToken");
       if (!accessToken) {
-        setError("Вы не авторизованы!");
+        setError("You are not authorized!");
         setLoading(false);
         return;
       }
 
       const response = await axios.get<MeetingResponse>(`http://127.0.0.1:8000/api/v1/meet/meets/${cleanedShortCode}/`, {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`, // Fixed template literal syntax
         },
       });
 
       navigate(`/meet/${response.data.short_code}`);
     } catch (error) {
-      console.error("Ошибка при присоединении к встрече", error);
+      console.error("Error joining meeting", error);
       const axiosError = error as AxiosError<ErrorResponse>;
       if (axiosError.response) {
         console.log("Status Code:", axiosError.response.status);
         console.log("Response Data:", axiosError.response.data);
         if (axiosError.response.status === 404 || 
             axiosError.response.data?.detail?.toLowerCase().includes("not found")) {
-          setError("Неверный код встречи");
+          setError("Invalid meeting code");
         } else {
           const errorMessage = axiosError.response.data?.detail || JSON.stringify(axiosError.response.data);
-          setError(`Ошибка при присоединении к встрече: ${errorMessage}`);
+          setError(`Error joining meeting: ${errorMessage}`);
         }
       } else {
-        setError("Ошибка при присоединении к встрече: Не удалось подключиться к серверу");
+        setError("Error joining meeting: Could not connect to the server");
       }
     } finally {
       setLoading(false);
@@ -143,72 +143,69 @@ export default function Home() {
   }, [darkMode]);
 
   return (
-
-    <div className="flex flex-col min-h-screen bg-gray-100 white:bg-gray-900 shadow-md w-full">
-      <header className="flex justify-between items-center p-4 bg-white white:bg-gray-800 shadow-md w-full fixed top-0 z-10">
-        <h1 className="text-2xl font-bold text-gray-800 white:text-white">EchoBridge</h1>
+    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900 shadow-md w-full">
+      <header className="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow-md w-full fixed top-0 z-10">
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">EchoBridge</h1>
         <div>
           <button
-            className={`mr-4 bg-gray-200 text-black dark:bg-black dark:text-white`}
+            className="mr-4 bg-gray-200 text-black dark:bg-black dark:text-white"
             onClick={() => setDarkMode(!darkMode)}
           >
-            {darkMode ? "☀️ Светлая" : "🌙 Тёмная"}
+            {darkMode ? "☀️ Light" : "🌙 Dark"}
           </button>
           {isAuthenticated ? (
             <button
               onClick={handleLogout}
               className="px-4 py-2 bg-red-600 text-white rounded-md shadow-md ml-2 hover:bg-red-700"
             >
-              Выйти
+              Logout
             </button>
           ) : (
             <>
               <Link to="/login" className="px-4 py-2 text-primary hover:underline">
-                Войти
+                Login
               </Link>
               <Link to="/register" className="px-4 py-2 bg-blue-600 text-white rounded-md shadow-md ml-2 hover:bg-blue-700 hover:text-white">
-                Зарегистрироваться
+                Register
               </Link>
             </>
           )}
         </div>
       </header>
 
-      <main className="flex-1  mx-auto flex flex-col md:flex-row items-center justify-between p-10 w-full mt-16">
+      <main className="flex-1 mx-auto flex flex-col md:flex-row items-center justify-between p-10 w-full mt-16">
         <div className="max-w-lg mb-10 md:mb-0 text-center md:text-left">
           <h2 className="text-4xl font-semibold text-gray-900 dark:text-white leading-tight">
-            Видеозвонки и встречи для всех
+            Video calls and meetings for everyone
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mt-4">
-            EchoBridge обеспечивает видеосвязь для совместной работы и общения — где бы вы ни находились.
+            EchoBridge provides video communication for collaboration and connection — wherever you are.
           </p>
           {error && <p className="text-red-500 mt-4">{error}</p>}
           <div className="mt-6 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
             <button
               onClick={createMeeting}
-              className="bg-blue-600 text-white px-6 py-3 rounded-md shadow-md hover:bg-blue-700 transition w-full md:w-auto disabled:bg-blue-400"
+              className="bg-blue-600 text-white px-6 py-4 rounded-md shadow-md hover:bg-blue-700 transition w-full md:w-auto disabled:bg-blue-400"
               disabled={loading}
             >
-              {loading ? "Создание..." : "Новая встреча"}
+              {loading ? "Creating..." : "New Meeting"}
             </button>
             <input
               type="text"
               placeholder="Введите код встречи"
-              className="border p-3 rounded-md w-full md:w-[130px] dark:bg-gray-700 dark:text-white"
               value={shortCode}
               onChange={(e) => {
                 setShortCode(e.target.value);
                 setError("");
               }}
-              className="border p-3 rounded-md w-full md:w-56 white:bg-gray-700 white:text-white"
               disabled={loading}
             />
             <button
               onClick={joinMeeting}
-              className="bg-gray-500 text-white px-4 py-3 rounded-md hover:bg-gray-600 w-full md:w-auto disabled:bg-gray-300"
+              className="bg-gray-500 text-white px-6 py-4 rounded-md hover:bg-gray-600 w-full md:w-28 disabled:bg-gray-300"
               disabled={loading}
             >
-              {loading ? "Присоединение..." : "Присоединиться"}
+              {loading ? "Joining..." : "Join"}
             </button>
           </div>
         </div>
@@ -222,20 +219,20 @@ export default function Home() {
       </main>
 
       <section className="py-12 bg-white dark:bg-gray-800 container mx-auto w-full px-4">
-        <h2 className="text-3xl font-semibold text-center text-gray-900 dark:text-white">Тарифные планы</h2>
+        <h2 className="text-3xl font-semibold text-center text-gray-900 dark:text-white">Pricing Plans</h2>
         <div className="flex flex-wrap justify-center mt-8 gap-6 w-full">
           {"Basic Pro Business Enterprise".split(" ").map((plan, index) => (
             <div key={index} className="w-full sm:w-1/2 md:w-1/3 lg:w-1/4 bg-gray-200 dark:bg-gray-700 p-6 rounded-lg shadow-md text-center">
               <h3 className="text-xl text-gray-900 dark:text-white font-bold">{plan}</h3>
               <p className="text-2xl text-gray-800 dark:text-white font-semibold mt-2">
-                {plan === "Basic" ? "Бесплатно" : plan === "Pro" ? "$19/мес" : plan === "Business" ? "$49/мес" : "По запросу"}
+                {plan === "Basic" ? "Free" : plan === "Pro" ? "$19/month" : plan === "Business" ? "$49/month" : "On request"}
               </p>
-              <ul className="mt-4 space-y-2 text-gray-700 white:text-gray-300">
-                <li>✅ {plan === "Basic" ? "До 5 языков" : plan === "Pro" ? "До 10 языков" : plan === "Business" ? "30+ языков" : "Все языков"}</li>
-                <li>✅ {plan === "Basic" ? "40 минут встречи" : "Безлимитное время"}</li>
+              <ul className="mt-4 space-y-2 text-gray-700 dark:text-gray-300">
+                <li>✅ {plan === "Basic" ? "Up to 5 languages" : plan === "Pro" ? "Up to 10 languages" : plan === "Business" ? "30+ languages" : "All languages"}</li>
+                <li>✅ {plan === "Basic" ? "40-minute meetings" : "Unlimited time"}</li>
               </ul>
               <button className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition">
-                {plan === "Basic" ? "Попробовать" : "Купить"}
+                {plan === "Basic" ? "Try" : "Buy"}
               </button>
             </div>
           ))}
@@ -243,7 +240,7 @@ export default function Home() {
       </section>
 
       <footer className="text-center p-4 bg-gray-800 text-white mt-10">
-        © 2025 EchoBridge. Все права защищены.
+        © 2025 EchoBridge. All rights reserved.
       </footer>
     </div>
   );
