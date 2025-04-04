@@ -63,24 +63,17 @@ const InMeeting: React.FC<InMeetingProps> = ({
 
   // Log when screenShareUserId changes
   useEffect(() => {
-    console.log("InMeeting: screenShareUserId changed:", screenShareUserId);
   }, [screenShareUserId]);
 
   // Local video (main view)
   useEffect(() => {
     if (!localVideoRef.current || !videoStream) {
-      console.log("Skipping local video setup: ref or stream missing", { ref: localVideoRef.current, stream: videoStream });
       return;
     }
     const videoElement = localVideoRef.current;
 
     const playVideo = async () => {
       try {
-        console.log("Local video stream state:", {
-          active: videoStream.active,
-          videoTracks: videoStream.getVideoTracks(),
-          audioTracks: videoStream.getAudioTracks(),
-        });
         if (videoElement.srcObject !== videoStream) {
           videoElement.pause();
           videoElement.srcObject = null;
@@ -90,9 +83,7 @@ const InMeeting: React.FC<InMeetingProps> = ({
           });
         }
         if (videoElement.paused && videoStream.active) {
-          console.log("Attempting to play local video on localVideoRef");
           await videoElement.play();
-          console.log("Local video playing on localVideoRef");
         }
         const videoTrack = videoStream.getVideoTracks()[0];
         videoTrack.enabled = isVideoOn;
@@ -107,7 +98,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
     playVideo();
 
     return () => {
-      console.log("Cleaning up localVideoRef");
       if (videoElement && !videoElement.paused) {
         videoElement.pause();
       }
@@ -123,11 +113,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
 
     const playVideo = async () => {
       try {
-        console.log("Local video scroll stream state:", {
-          active: videoStream.active,
-          videoTracks: videoStream.getVideoTracks(),
-          audioTracks: videoStream.getAudioTracks(),
-        });
         if (videoElement.srcObject !== videoStream) {
           videoElement.pause();
           videoElement.srcObject = null;
@@ -137,9 +122,7 @@ const InMeeting: React.FC<InMeetingProps> = ({
           });
         }
         if (videoElement.paused && videoStream.active) {
-          console.log("Attempting to play local video on localVideoScrollRef");
           await videoElement.play();
-          console.log("Local video playing on localVideoScrollRef");
         }
         const videoTrack = videoStream.getVideoTracks()[0];
         videoTrack.enabled = isVideoOn;
@@ -154,7 +137,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
     playVideo();
 
     return () => {
-      console.log("Cleaning up localVideoScrollRef");
       if (videoElement && !videoElement.paused) {
         videoElement.pause();
       }
@@ -191,7 +173,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
 
   // Remote screen-share videos
   useEffect(() => {
-    console.log("Remote screen-share useEffect triggered:", { screenShareUserId, remoteScreenShareStreams: Array.from(remoteScreenShareStreams.entries()) });
     remoteScreenShareRefs.current.forEach((videoElement, userId) => {
       if (!videoElement) return;
       if (screenShareUserId === userId && remoteScreenShareStreams.has(userId)) {
@@ -205,7 +186,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
           }
         }
       } else {
-        console.log(`Clearing remote screen-share video for user ${userId} as screenShareUserId is ${screenShareUserId}`);
         videoElement.pause();
         videoElement.srcObject = null;
       }
@@ -220,16 +200,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
         const clientHeight = container.clientHeight;
         const hasOverflow = scrollHeight > clientHeight + 2;
         setShouldScroll(hasOverflow);
-        console.log(
-          "Scroll height:",
-          scrollHeight,
-          "Client height:",
-          clientHeight,
-          "Height difference:",
-          scrollHeight - clientHeight,
-          "Should scroll:",
-          hasOverflow
-        );
       }
     };
 
@@ -246,9 +216,6 @@ const InMeeting: React.FC<InMeetingProps> = ({
   };
 
   const getParticipantName = (userId: string) => usernames.get(userId) || "Unknown";
-
-  // Log render to confirm UI updates
-  console.log("InMeeting render:", { screenShareUserId, remoteScreenShareStreams: Array.from(remoteScreenShareStreams.entries()) });
 
   return (
     <>
